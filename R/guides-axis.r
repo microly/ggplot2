@@ -72,26 +72,18 @@ guide_train.axis <- function(guide, scale, aesthetic = NULL) {
   names(empty_ticks) <- c(aesthetic, ".value", ".label")
 
   if (length(intersect(scale$aesthetics, guide$available_aes)) == 0) {
-    warning(
+    warn(glue(
       "axis guide needs appropriate scales: ",
-      paste(guide$available_aes, collapse = ", "),
-      call. = FALSE
-    )
+      glue_collapse(guide$available_aes, ", ", last = " or ")
+    ))
     guide$key <- empty_ticks
   } else if (length(breaks) == 0) {
     guide$key <- empty_ticks
   } else {
-    ticks <- new_data_frame(setNames(list(scale$map(breaks)), aesthetic))
+    mapped_breaks <- if (scale$is_discrete()) scale$map(breaks) else breaks
+    ticks <- new_data_frame(setNames(list(mapped_breaks), aesthetic))
     ticks$.value <- breaks
     ticks$.label <- scale$get_labels(breaks)
-
-    if (is.list(ticks$.label)) {
-      if (any(sapply(ticks$.label, is.language))) {
-        ticks$.label <- do.call(expression, ticks$.label)
-      } else {
-        ticks$.label <- unlist(ticks$.label)
-      }
-    }
 
     guide$key <- ticks[is.finite(ticks[[aesthetic]]), ]
   }
@@ -127,12 +119,8 @@ guide_transform.axis <- function(guide, coord, panel_params) {
 # discards the new guide with a warning
 #' @export
 guide_merge.axis <- function(guide, new_guide) {
-  if (!inherits(guide, "guide_none")) {
-    warning(
-      "guide_axis(): Discarding guide on merge. ",
-      "Do you have more than one guide with the same position?",
-      call. = FALSE
-    )
+  if (!inherits(new_guide, "guide_none")) {
+    warn("guide_axis(): Discarding guide on merge. Do you have more than one guide with the same position?")
   }
 
   guide
@@ -197,10 +185,18 @@ draw_axis <- function(break_positions, break_labels, axis_position, theme,
   # override label element parameters for rotation
   if (inherits(label_element, "element_text")) {
     label_overrides <- axis_label_element_overrides(axis_position, angle)
-    # label_overrides is always an element_text(), but in order for the merge to
-    # keep the new class, the override must also have the new class
-    class(label_overrides) <- class(label_element)
-    label_element <- merge_element(label_overrides, label_element)
+    # label_overrides is an element_text, but label_element may not be;
+    # to merge the two elements, we just copy angle, hjust, and vjust
+    # unless their values are NULL
+    if (!is.null(label_overrides$angle)) {
+      label_element$angle <- label_overrides$angle
+    }
+    if (!is.null(label_overrides$hjust)) {
+      label_element$hjust <- label_overrides$hjust
+    }
+    if (!is.null(label_overrides$vjust)) {
+      label_element$vjust <- label_overrides$vjust
+    }
   }
 
   # conditionally set parameters that depend on axis orientation
@@ -386,7 +382,7 @@ axis_label_element_overrides <- function(axis_position, angle = NULL) {
 
   # it is not worth the effort to align upside-down labels properly
   if (angle > 90 || angle < -90) {
-    stop("`angle` must be between 90 and -90", call. = FALSE)
+    abort("`angle` must be between 90 and -90")
   }
 
   if (axis_position == "bottom") {
@@ -414,7 +410,7 @@ axis_label_element_overrides <- function(axis_position, angle = NULL) {
       vjust = if (angle > 0) 1 else if (angle < 0) 0 else 0.5,
     )
   } else {
-    stop("Unrecognized position: '", axis_position, "'", call. = FALSE)
+    abort(glue("Unrecognized position: '{axis_position}'"))
   }
 }
 
@@ -435,10 +431,6 @@ warn_for_guide_position <- function(guide) {
   }
 
   if (length(unique(guide$key[[position_aes]])) == 1) {
-    warning(
-      "Position guide is perpendicular to the intended axis. ",
-      "Did you mean to specify a different guide `position`?",
-      call. = FALSE
-    )
+    warn("Position guide is perpendicular to the intended axis. Did you mean to specify a different guide `position`?")
   }
 }

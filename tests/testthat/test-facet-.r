@@ -140,16 +140,16 @@ test_that("facets_wrap() compacts the facet spec and accept empty spec", {
   p <- ggplot(df, aes(x, y)) + geom_point() + facet_wrap(vars(NULL))
   d <- layer_data(p)
 
-  expect_equal(d$PANEL, c(1L, 1L, 1L))
-  expect_equal(d$group, c(-1L, -1L, -1L))
+  expect_equal(d$PANEL, factor(c(1L, 1L, 1L)))
+  expect_equal(d$group, structure(c(-1L, -1L, -1L), n = 1L))
 })
 
 test_that("facets_grid() compacts the facet spec and accept empty spec", {
   p <- ggplot(df, aes(x, y)) + geom_point() + facet_grid(vars(NULL))
   d <- layer_data(p)
 
-  expect_equal(d$PANEL, c(1L, 1L, 1L))
-  expect_equal(d$group, c(-1L, -1L, -1L))
+  expect_equal(d$PANEL, factor(c(1L, 1L, 1L)))
+  expect_equal(d$group, structure(c(-1L, -1L, -1L), n = 1L))
 })
 
 
@@ -299,6 +299,27 @@ test_that("combine_vars() generates the correct combinations with multiple data 
   expect_identical(
     combine_vars(list(df), vars = vars),
     combine_vars(list(df, df[c("letter", "number")]), vars = vars)
+  )
+})
+
+test_that("eval_facet() is tolerant for missing columns (#2963)", {
+  expect_null(eval_facet(quo(2 * x), data_frame(foo = 1), possible_columns = c("x")))
+  expect_null(eval_facet(quo(2 * .data$x), data_frame(foo = 1), possible_columns = c("x")))
+
+  # Even if there's the same name of external variable, eval_facet() returns NULL before
+  # reaching to the variable
+  bar <- 2
+  expect_null(eval_facet(quo(2 * bar), data_frame(foo = 1), possible_columns = c("bar")))
+  # If there's no same name of columns, the external variable is used
+  expect_equal(
+    eval_facet(quo(2 * bar), data_frame(foo = 1), possible_columns = c("x")),
+    4
+  )
+
+  # If the expression contains any non-existent variable, it fails
+  expect_error(
+    eval_facet(quo(no_such_variable * x), data_frame(foo = 1), possible_columns = c("x")),
+    "object 'no_such_variable' not found"
   )
 })
 

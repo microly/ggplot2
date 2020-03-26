@@ -61,7 +61,8 @@
 #' @family guides
 #' @examples
 #' \donttest{
-#' df <- reshape2::melt(outer(1:4, 1:4), varnames = c("X1", "X2"))
+#' df <- expand.grid(X1 = 1:10, X2 = 1:10)
+#' df$value <- df$X1 * df$X2
 #'
 #' p1 <- ggplot(df, aes(X1, X2)) + geom_tile(aes(fill = value))
 #' p2 <- p1 + geom_point(aes(size = value))
@@ -234,7 +235,7 @@ guide_merge.legend <- function(guide, new_guide) {
   guide$key <- cbind(guide$key, new_guide$key)
   guide$override.aes <- c(guide$override.aes, new_guide$override.aes)
   if (any(duplicated(names(guide$override.aes)))) {
-    warning("Duplicated override.aes is ignored.")
+    warn("Duplicated override.aes is ignored.")
   }
   guide$override.aes <- guide$override.aes[!duplicated(names(guide$override.aes))]
   guide
@@ -258,7 +259,16 @@ guide_geom.legend <- function(guide, layers, default_mapping) {
       n <- vapply(layer$aes_params, length, integer(1))
       params <- layer$aes_params[n == 1]
 
-      data <- layer$geom$use_defaults(guide$key[matched], params)
+      aesthetics <- layer$mapping
+      modifiers <- aesthetics[is_scaled_aes(aesthetics) | is_staged_aes(aesthetics)]
+
+      data <- tryCatch(
+        layer$geom$use_defaults(guide$key[matched], params, modifiers),
+        error = function(...) {
+          warn("Failed to apply `after_scale()` modifications to legend")
+          layer$geom$use_defaults(guide$key[matched], params, list())
+        }
+      )
     } else {
       data <- layer$geom$use_defaults(NULL, layer$aes_params)[rep(1, nrow(guide$key)), ]
     }
@@ -287,7 +297,7 @@ guide_gengrob.legend <- function(guide, theme) {
   # default setting
   label.position <- guide$label.position %||% "right"
   if (!label.position %in% c("top", "bottom", "left", "right"))
-    stop("label position \"", label.position, "\" is invalid")
+    abort(glue("label position `{label.position}` is invalid"))
 
   nbreak <- nrow(guide$key)
 
@@ -378,10 +388,7 @@ guide_gengrob.legend <- function(guide, theme) {
 
   if (!is.null(guide$nrow) && !is.null(guide$ncol) &&
       guide$nrow * guide$ncol < nbreak) {
-    stop(
-      "`nrow` * `ncol` needs to be larger than the number of breaks",
-      call. = FALSE
-    )
+    abort("`nrow` * `ncol` needs to be larger than the number of breaks")
   }
 
   # If neither nrow/ncol specified, guess with "reasonable" values

@@ -15,10 +15,10 @@
 #'   `boundary`, may be specified for a single plot. `center` specifies the
 #'   center of one of the bins. `boundary` specifies the boundary between two
 #'   bins. Note that if either is above or below the range of the data, things
-#'   will be shifted by the appropriate integer multiple of `width`.
-#'   For example, to center on integers use `width = 1` and `center = 0`, even
+#'   will be shifted by the appropriate integer multiple of `binwidth`.
+#'   For example, to center on integers use `binwidth = 1` and `center = 0`, even
 #'   if `0` is outside the range of the data. Alternatively, this same alignment
-#'   can be specified with `width = 1` and `boundary = 0.5`, even if `0.5` is
+#'   can be specified with `binwidth = 1` and `boundary = 0.5`, even if `0.5` is
 #'   outside the range of the data.
 #' @param breaks Alternatively, you can supply a numeric vector giving
 #'    the bin boundaries. Overrides `binwidth`, `bins`, `center`,
@@ -89,38 +89,37 @@ StatBin <- ggproto("StatBin", Stat,
     has_x <- !(is.null(data$x) && is.null(params$x))
     has_y <- !(is.null(data$y) && is.null(params$y))
     if (!has_x && !has_y) {
-      stop("stat_bin() requires an x or y aesthetic.", call. = FALSE)
+      abort("stat_bin() requires an x or y aesthetic.")
     }
     if (has_x && has_y) {
-      stop("stat_bin() can only have an x or y aesthetic.", call. = FALSE)
+      abort("stat_bin() can only have an x or y aesthetic.")
     }
 
     x <- flipped_names(params$flipped_aes)$x
     if (is.integer(data[[x]])) {
-      stop('StatBin requires a continuous ', x, ' variable: the ',
-           x, ' variable is discrete. Perhaps you want stat="count"?',
-        call. = FALSE)
+      abort(glue("StatBin requires a continuous {x} variable: the {x} variable is discrete.",
+                 "Perhaps you want stat=\"count\"?"))
     }
 
     if (!is.null(params$drop)) {
-      warning("`drop` is deprecated. Please use `pad` instead.", call. = FALSE)
+      warn("`drop` is deprecated. Please use `pad` instead.")
       params$drop <- NULL
     }
     if (!is.null(params$origin)) {
-      warning("`origin` is deprecated. Please use `boundary` instead.", call. = FALSE)
+      warn("`origin` is deprecated. Please use `boundary` instead.")
       params$boundary <- params$origin
       params$origin <- NULL
     }
     if (!is.null(params$right)) {
-      warning("`right` is deprecated. Please use `closed` instead.", call. = FALSE)
+      warn("`right` is deprecated. Please use `closed` instead.")
       params$closed <- if (params$right) "right" else "left"
       params$right <- NULL
     }
     if (!is.null(params$width)) {
-      stop("`width` is deprecated. Do you want `geom_bar()`?", call. = FALSE)
+      abort("`width` is deprecated. Do you want `geom_bar()`?")
     }
     if (!is.null(params$boundary) && !is.null(params$center)) {
-      stop("Only one of `boundary` and `center` may be specified.", call. = FALSE)
+      abort("Only one of `boundary` and `center` may be specified.")
     }
 
     if (is.null(params$breaks) && is.null(params$binwidth) && is.null(params$bins)) {
@@ -162,7 +161,7 @@ StatBin <- ggproto("StatBin", Stat,
     flip_data(bins, flipped_aes)
   },
 
-  default_aes = aes(x = stat(count), y = stat(count), weight = 1),
+  default_aes = aes(x = after_stat(count), y = after_stat(count), weight = 1),
 
   required_aes = "x|y"
 )

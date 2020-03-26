@@ -17,6 +17,10 @@
 #' one change at a time. You may need to look at a few options to uncover
 #' the full story behind your data.
 #'
+#' In addition to `geom_histogram`, you can create a histogram plot by using
+#' `scale_x_binned()` with [geom_bar()]. This method by default plots tick marks
+#' in between each bar.
+#'
 #' @eval rd_orientation()
 #'
 #' @section Aesthetics:
@@ -39,6 +43,12 @@
 #' ggplot(diamonds, aes(y = carat)) +
 #'   geom_histogram()
 #'
+#' # For histograms with tick marks between each bin, use `geom_bar` with
+#' # `scale_x_binned`.
+#' ggplot(diamonds, aes(carat)) +
+#'   geom_bar() +
+#'   scale_x_binned()
+#'
 #' # Rather than stacking histograms, it's easier to compare frequency
 #' # polygons
 #' ggplot(diamonds, aes(price, fill = cut)) +
@@ -48,7 +58,7 @@
 #'
 #' # To make it easier to compare distributions with very different counts,
 #' # put density on the y axis instead of the default count
-#' ggplot(diamonds, aes(price, stat(density), colour = cut)) +
+#' ggplot(diamonds, aes(price, after_stat(density), colour = cut)) +
 #'   geom_freqpoly(binwidth = 500)
 #'
 #' if (require("ggplot2movies")) {
@@ -88,8 +98,8 @@
 #' # You can specify a function for calculating binwidth, which is
 #' # particularly useful when faceting along variables with
 #' # different ranges because the function will be called once per facet
-#' mtlong <- reshape2::melt(mtcars)
-#' ggplot(mtlong, aes(value)) + facet_wrap(~variable, scales = 'free_x') +
+#' ggplot(economics_long, aes(value)) +
+#'   facet_wrap(~variable, scales = 'free_x') +
 #'   geom_histogram(binwidth = function(x) 2 * IQR(x) / (length(x)^(1/3)))
 geom_histogram <- function(mapping = NULL, data = NULL,
                            stat = "bin", position = "stack",

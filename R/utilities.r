@@ -39,8 +39,10 @@ check_required_aesthetics <- function(required, present, name) {
   missing_aes <- lapply(required, setdiff, present)
   if (any(vapply(missing_aes, length, integer(1)) == 0)) return()
 
-  stop(name, " requires the following missing aesthetics: ",
-    paste(lapply(missing_aes, paste, collapse = ", "), collapse = " or "), call. = FALSE)
+  abort(glue(
+    "{name} requires the following missing aesthetics: ",
+    glue_collapse(lapply(missing_aes, glue_collapse, sep = ", ", last = " and "), sep = " or ")
+  ))
 }
 
 # Concatenate a named list for output
@@ -64,8 +66,10 @@ try_require <- function(package, fun) {
     return(invisible())
   }
 
-  stop("Package `", package, "` required for `", fun , "`.\n",
-    "Please install and try again.", call. = FALSE)
+  abort(glue("
+    Package `{package}` required for `{fun}`.
+    Please install and try again.
+  "))
 }
 
 # Return unique columns
@@ -95,7 +99,9 @@ uniquecols <- function(df) {
 #' @export
 remove_missing <- function(df, na.rm = FALSE, vars = names(df), name = "",
                            finite = FALSE) {
-  stopifnot(is.logical(na.rm))
+  if (!is.logical(na.rm)) {
+    abort("`na.rm` must be logical")
+  }
 
   missing <- detect_missing(df, vars, finite)
 
@@ -161,7 +167,9 @@ is_complete <- function(x) {
 #' should_stop(should_stop("Hi!"))
 should_stop <- function(expr) {
   res <- try(print(force(expr)), TRUE)
-  if (!inherits(res, "try-error")) stop("No error!", call. = FALSE)
+  if (!inherits(res, "try-error")) {
+    abort("No error!")
+  }
   invisible()
 }
 
@@ -204,22 +212,21 @@ gg_dep <- function(version, msg) {
   .Deprecated()
   v <- as.package_version(version)
   cv <- utils::packageVersion("ggplot2")
+  text <- "{msg} (Defunct; last used in version {version})"
 
   # If current major number is greater than last-good major number, or if
   #  current minor number is more than 1 greater than last-good minor number,
   #  give error.
   if (cv[[1,1]] > v[[1,1]]  ||  cv[[1,2]] > v[[1,2]] + 1) {
-    stop(msg, " (Defunct; last used in version ", version, ")",
-      call. = FALSE)
+    abort(glue(text))
 
   # If minor number differs by one, give warning
   } else if (cv[[1,2]] > v[[1,2]]) {
-    warning(msg, " (Deprecated; last used in version ", version, ")",
-      call. = FALSE)
+    warn(glue(text))
 
   # If only subminor number is greater, give message
   } else if (cv[[1,3]] > v[[1,3]]) {
-    message(msg, " (Deprecated; last used in version ", version, ")")
+    message(glue(text))
   }
 
   invisible()
@@ -241,11 +248,11 @@ to_lower_ascii <- function(x) chartr(upper_ascii, lower_ascii, x)
 to_upper_ascii <- function(x) chartr(lower_ascii, upper_ascii, x)
 
 tolower <- function(x) {
-  stop('Please use `to_lower_ascii()`, which works fine in all locales.', call. = FALSE)
+  abort("Please use `to_lower_ascii()`, which works fine in all locales.")
 }
 
 toupper <- function(x) {
-  stop('Please use `to_upper_ascii()`, which works fine in all locales.', call. = FALSE)
+  abort("Please use `to_upper_ascii()`, which works fine in all locales.")
 }
 
 # Convert a snake_case string to camelCase
@@ -278,11 +285,16 @@ is.discrete <- function(x) {
   is.factor(x) || is.character(x) || is.logical(x)
 }
 
-# This function checks that all columns of a dataframe `x` are data and
-# returns the names of any columns that are not.
-# We define "data" as atomic types or lists, not functions or otherwise
+# This function checks that all columns of a dataframe `x` are data and returns
+# the names of any columns that are not.
+# We define "data" as atomic types or lists, not functions or otherwise.
+# The `inherits(x, "Vector")` check is for checking S4 classes from Bioconductor
+# and wether they can be expected to follow behavior typical of vectors. See
+# also #3835
 check_nondata_cols <- function(x) {
-  idx <- (vapply(x, function(x) rlang::is_vector(x), logical(1)))
+  idx <- (vapply(x, function(x) {
+    is.null(x) || rlang::is_vector(x) || inherits(x, "Vector")
+  }, logical(1)))
   names(x)[which(!idx)]
 }
 
@@ -311,7 +323,7 @@ message_wrap <- function(...) {
 warning_wrap <- function(...) {
   msg <- paste(..., collapse = "", sep = "")
   wrapped <- strwrap(msg, width = getOption("width") - 2)
-  warning(paste0(wrapped, collapse = "\n"), call. = FALSE)
+  warn(glue_collapse(wrapped, "\n", last = "\n"))
 }
 
 var_list <- function(x) {
@@ -372,7 +384,7 @@ NULL
 # Check inputs with tibble but allow column vectors (see #2609 and #2374)
 as_gg_data_frame <- function(x) {
   x <- lapply(x, validate_column_vec)
-  new_data_frame(tibble::as_tibble(x))
+  new_data_frame(x)
 }
 validate_column_vec <- function(x) {
   if (is_column_vec(x)) {
@@ -395,7 +407,9 @@ is_column_vec <- function(x) {
 # #> expression(alpha, NA, gamma)
 #
 parse_safe <- function(text) {
-  stopifnot(is.character(text))
+  if (!is.character(text)) {
+    abort("`text` must be a character vector")
+  }
   out <- vector("expression", length(text))
   for (i in seq_along(text)) {
     expr <- parse(text = text[[i]])
@@ -466,6 +480,10 @@ switch_orientation <- function(aesthetics) {
 #'   will be the discrete-like one. Examples of `TRUE` is [stat_density()] and
 #'   [stat_bin()], while examples of `FALSE` is [stat_ydensity()] and
 #'   [stat_boxplot()]
+#' - `main_is_optional`: This argument controls the rare case of layers were the
+#'   main direction is an optional aesthetic. This is only seen in
+#'   [stat_boxplot()] where `x` is set to `0` if not given. If `TRUE` there will
+#'   be a check for whether all `x` or all `y` are equal to `0`
 #'
 #' @param data The layer data
 #' @param params The parameters of the `Stat`/`Geom`. Only the `orientation`
@@ -482,6 +500,8 @@ switch_orientation <- function(aesthetics) {
 #'   will only be flipped if `params$orientation == "y"`
 #' @param main_is_continuous If there is a discrete and continuous axis, does
 #'   the continuous one correspond to the main orientation?
+#' @param main_is_optional Is the main axis aesthetic optional and, if not
+#'   given, set to `0`
 #' @param flip Logical. Is the layer flipped.
 #'
 #' @return `has_flipped_aes()` returns `TRUE` if it detects a layer in the other
@@ -498,7 +518,8 @@ switch_orientation <- function(aesthetics) {
 #'
 has_flipped_aes <- function(data, params = list(), main_is_orthogonal = NA,
                             range_is_orthogonal = NA, group_has_equal = FALSE,
-                            ambiguous = FALSE, main_is_continuous = FALSE) {
+                            ambiguous = FALSE, main_is_continuous = FALSE,
+                            main_is_optional = FALSE) {
   # Is orientation already encoded in data?
   if (!is.null(data$flipped_aes)) {
     not_na <- which(!is.na(data$flipped_aes))
@@ -512,20 +533,27 @@ has_flipped_aes <- function(data, params = list(), main_is_orthogonal = NA,
     return(params$orientation == "y")
   }
 
+  x <- data$x %||% params$x
+  y <- data$y %||% params$y
+  xmin <- data$xmin %||% params$xmin
+  ymin <- data$ymin %||% params$ymin
+  xmax <- data$xmax %||% params$xmax
+  ymax <- data$ymax %||% params$ymax
+
   # Does a single x or y aesthetic corespond to a specific orientation
-  if (!is.na(main_is_orthogonal) && sum(c("x", "y") %in% names(data)) + sum(c("x", "y") %in% names(params)) == 1) {
-    return(("x" %in% names(data) || "x" %in% names(params)) == main_is_orthogonal)
+  if (!is.na(main_is_orthogonal) && xor(is.null(x), is.null(y))) {
+    return(is.null(y) == main_is_orthogonal)
   }
 
-  has_x <- !is.null(data$x)
-  has_y <- !is.null(data$y)
+  has_x <- !is.null(x)
+  has_y <- !is.null(y)
 
   # Does a provided range indicate an orientation
   if (!is.na(range_is_orthogonal)) {
-    if (any(c("ymin", "ymax") %in% names(data))) {
+    if (!is.null(ymin) || !is.null(ymax)) {
       return(!range_is_orthogonal)
     }
-    if (any(c("xmin", "xmax") %in% names(data))) {
+    if (!is.null(xmin) || !is.null(xmax)) {
       return(range_is_orthogonal)
     }
   }
@@ -536,8 +564,8 @@ has_flipped_aes <- function(data, params = list(), main_is_orthogonal = NA,
   }
 
   # Is there a single actual discrete position
-  y_is_int <- is.integer(data$y)
-  x_is_int <- is.integer(data$x)
+  y_is_int <- is.integer(y)
+  x_is_int <- is.integer(x)
   if (xor(y_is_int, x_is_int)) {
     return(y_is_int != main_is_continuous)
   }
@@ -545,12 +573,14 @@ has_flipped_aes <- function(data, params = list(), main_is_orthogonal = NA,
   # Does each group have a single x or y value
   if (group_has_equal) {
     if (has_x) {
+      if (length(x) == 1) return(FALSE)
       x_groups <- vapply(split(data$x, data$group), function(x) length(unique(x)), integer(1))
       if (all(x_groups == 1)) {
         return(FALSE)
       }
     }
     if (has_y) {
+      if (length(y) == 1) return(TRUE)
       y_groups <- vapply(split(data$y, data$group), function(x) length(unique(x)), integer(1))
       if (all(y_groups == 1)) {
         return(TRUE)
@@ -568,24 +598,30 @@ has_flipped_aes <- function(data, params = list(), main_is_orthogonal = NA,
     return(FALSE)
   }
   # Is there a single discrete-like position
-  y_is_int <- if (has_y) isTRUE(all.equal(data$y, round(data$y))) else FALSE
-  x_is_int <- if (has_x) isTRUE(all.equal(data$x, round(data$x))) else FALSE
+  y_is_int <- if (has_y) isTRUE(all.equal(y, round(y))) else FALSE
+  x_is_int <- if (has_x) isTRUE(all.equal(x, round(x))) else FALSE
   if (xor(y_is_int, x_is_int)) {
     return(y_is_int != main_is_continuous)
   }
-  # Is one of the axes a single value
-  if (all(data$x == 1)) {
-    return(main_is_continuous)
-  }
-  if (all(data$y == 1)) {
-    return(!main_is_continuous)
-  }
-  # If both are discrete like, which have most 0 or 1-spaced values
-  y_diff <- diff(sort(data$y))
-  x_diff <- diff(sort(data$x))
 
+  if (main_is_optional) {
+    # Is one of the axes all 0
+    if (all(x == 0)) {
+      return(main_is_continuous)
+    }
+    if (all(y == 0)) {
+      return(!main_is_continuous)
+    }
+  }
+
+  y_diff <- diff(sort(y))
+  x_diff <- diff(sort(x))
+
+  # FIXME: If both are discrete like, give up. Probably, we can make a better
+  # guess, but it's not possible with the current implementation as very little
+  # information is available in Geom$setup_params().
   if (y_is_int && x_is_int) {
-    return((sum(x_diff <= 1) < sum(y_diff <= 1)) != main_is_continuous)
+    return(FALSE)
   }
 
   y_diff <- y_diff[y_diff != 0]
@@ -603,8 +639,8 @@ has_flipped_aes <- function(data, params = list(), main_is_orthogonal = NA,
 #' @rdname bidirection
 #' @export
 flip_data <- function(data, flip = NULL) {
-  flip <- flip %||% data$flipped_aes[1] %||% FALSE
-  if (flip) {
+  flip <- flip %||% any(data$flipped_aes) %||% FALSE
+  if (isTRUE(flip)) {
     names(data) <- switch_orientation(names(data))
   }
   data
@@ -621,4 +657,11 @@ flipped_names <- function(flip = FALSE) {
   }
   names(ret) <- c(x_aes, y_aes)
   ret
+}
+
+split_with_index <- function(x, f, n = max(f)) {
+  if (n == 1) return(list(x))
+  f <- as.integer(f)
+  attributes(f) <- list(levels = as.character(seq_len(n)), class = "factor")
+  unname(split(x, f))
 }

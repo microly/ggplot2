@@ -56,7 +56,7 @@
 #'   - The default ([scales::censor()]) replaces out of
 #'   bounds values with `NA`.
 #'   - [scales::squish()] for squishing out of bounds values into range.
-#'   - [scales::squish_infinite()] for squishing infitite values into range.
+#'   - [scales::squish_infinite()] for squishing infinite values into range.
 #' @param na.value Missing values will be replaced with this value.
 #' @param trans For continuous scales, the name of a transformation object
 #'   or the object itself. Built-in transformations include "asn", "atanh",
@@ -291,7 +291,7 @@ binned_scale <- function(aesthetics, scale_name, palette, name = waiver(),
 #'   position scales, only the continuous range is reset.
 #'
 #' - `map()` Map transformed data values to some output value as
-#'   determined by `self$rescale()` and `self$pallete` (except for position scales,
+#'   determined by `self$rescale()` and `self$palette` (except for position scales,
 #'   which do not use the default implementation of this method). The output corresponds
 #'   to the transformed data value in aesthetic space (e.g., a color, line width, or size).
 #'
@@ -359,7 +359,7 @@ Scale <- ggproto("Scale", NULL,
   aesthetics = aes(),
   scale_name = NULL,
   palette = function() {
-    stop("Not implemented", call. = FALSE)
+    abort("Not implemented")
   },
 
   range = ggproto(NULL, Range),
@@ -375,7 +375,7 @@ Scale <- ggproto("Scale", NULL,
 
 
   is_discrete = function() {
-    stop("Not implemented", call. = FALSE)
+    abort("Not implemented")
   },
 
   train_df = function(self, df) {
@@ -389,7 +389,7 @@ Scale <- ggproto("Scale", NULL,
   },
 
   train = function(self, x) {
-    stop("Not implemented", call. = FALSE)
+    abort("Not implemented")
   },
 
   reset = function(self) {
@@ -414,7 +414,7 @@ Scale <- ggproto("Scale", NULL,
   },
 
   transform = function(self, x) {
-    stop("Not implemented", call. = FALSE)
+    abort("Not implemented")
   },
 
   map_df = function(self, df, i = NULL) {
@@ -436,11 +436,11 @@ Scale <- ggproto("Scale", NULL,
   },
 
   map = function(self, x, limits = self$get_limits()) {
-    stop("Not implemented", call. = FALSE)
+    abort("Not implemented")
   },
 
   rescale = function(self, x, limits = self$get_limits(), range = self$dimension()) {
-    stop("Not implemented", call. = FALSE)
+    abort("Not implemented")
   },
 
   get_limits = function(self) {
@@ -458,11 +458,11 @@ Scale <- ggproto("Scale", NULL,
   },
 
   dimension = function(self, expand = expansion(0, 0), limits = self$get_limits()) {
-    stop("Not implemented", call. = FALSE)
+    abort("Not implemented")
   },
 
   get_breaks = function(self, limits = self$get_limits()) {
-    stop("Not implemented", call. = FALSE)
+    abort("Not implemented")
   },
 
   break_positions = function(self, range = self$get_limits()) {
@@ -470,19 +470,19 @@ Scale <- ggproto("Scale", NULL,
   },
 
   get_breaks_minor = function(self, n = 2, b = self$break_positions(), limits = self$get_limits()) {
-    stop("Not implemented", call. = FALSE)
+    abort("Not implemented")
   },
 
   get_labels = function(self, breaks = self$get_breaks()) {
-    stop("Not implemented", call. = FALSE)
+    abort("Not implemented")
   },
 
   clone = function(self) {
-    stop("Not implemented", call. = FALSE)
+    abort("Not implemented")
   },
 
   break_info = function(self, range = NULL) {
-    stop("Not implemented", call. = FALSE)
+    abort("Not implemented")
   },
 
   axis_order = function(self) {
@@ -513,7 +513,7 @@ check_breaks_labels <- function(breaks, labels) {
   bad_labels <- is.atomic(breaks) && is.atomic(labels) &&
     length(breaks) != length(labels)
   if (bad_labels) {
-    stop("`breaks` and `labels` must have the same length", call. = FALSE)
+    abort("`breaks` and `labels` must have the same length")
   }
 
   TRUE
@@ -531,6 +531,7 @@ ScaleContinuous <- ggproto("ScaleContinuous", Scale,
   oob = censor,
   minor_breaks = waiver(),
   n.breaks = NULL,
+  trans = identity_trans(),
 
   is_discrete = function() FALSE,
 
@@ -601,7 +602,7 @@ ScaleContinuous <- ggproto("ScaleContinuous", Scale,
     }
 
     if (identical(self$breaks, NA)) {
-      stop("Invalid breaks specification. Use NULL, not NA", call. = FALSE)
+      abort("Invalid breaks specification. Use NULL, not NA")
     }
 
     if (zero_range(as.numeric(limits))) {
@@ -611,7 +612,7 @@ ScaleContinuous <- ggproto("ScaleContinuous", Scale,
         breaks <- self$trans$breaks(limits, self$n.breaks)
       } else {
         if (!is.null(self$n.breaks)) {
-          warning("Ignoring n.breaks. Use a trans object that supports setting number of breaks", call. = FALSE)
+          warn("Ignoring n.breaks. Use a trans object that supports setting number of breaks")
         }
         breaks <- self$trans$breaks(limits)
       }
@@ -639,7 +640,7 @@ ScaleContinuous <- ggproto("ScaleContinuous", Scale,
     }
 
     if (identical(self$minor_breaks, NA)) {
-      stop("Invalid minor_breaks specification. Use NULL, not NA", call. = FALSE)
+      abort("Invalid minor_breaks specification. Use NULL, not NA")
     }
 
     if (is.waive(self$minor_breaks)) {
@@ -672,7 +673,7 @@ ScaleContinuous <- ggproto("ScaleContinuous", Scale,
     }
 
     if (identical(self$labels, NA)) {
-      stop("Invalid labels specification. Use NULL, not NA", call. = FALSE)
+      abort("Invalid labels specification. Use NULL, not NA")
     }
 
     if (is.waive(self$labels)) {
@@ -684,7 +685,19 @@ ScaleContinuous <- ggproto("ScaleContinuous", Scale,
     }
 
     if (length(labels) != length(breaks)) {
-      stop("Breaks and labels are different lengths", call. = FALSE)
+      abort("Breaks and labels are different lengths")
+    }
+    if (is.list(labels)) {
+      # Guard against list with empty elements
+      labels[vapply(labels, length, integer(1)) == 0] <- ""
+      # Make sure each element is scalar
+      labels <- lapply(labels, `[`, 1)
+
+      if (any(vapply(labels, is.language, logical(1)))) {
+        labels <- do.call(expression, labels)
+      } else {
+        labels <- unlist(labels)
+      }
     }
 
     labels
@@ -733,7 +746,11 @@ ScaleContinuous <- ggproto("ScaleContinuous", Scale,
 
     cat("<", class(self)[[1]], ">\n", sep = "")
     cat(" Range:  ", show_range(self$range$range), "\n", sep = "")
-    cat(" Limits: ", show_range(self$dimension()), "\n", sep = "")
+    if (is.function(self$limits)) {
+      cat(" Limits: function()\n")
+    } else {
+      cat(" Limits: ", show_range(self$dimension()), "\n", sep = "")
+    }
   }
 )
 
@@ -767,18 +784,23 @@ ScaleDiscrete <- ggproto("ScaleDiscrete", Scale,
       pal <- self$palette.cache
     } else {
       if (!is.null(self$n.breaks.cache)) {
-        warning("Cached palette does not match requested", call. = FALSE)
+        warn("Cached palette does not match requested")
       }
       pal <- self$palette(n)
       self$palette.cache <- pal
       self$n.breaks.cache <- n
     }
 
-    if (is.null(names(pal))) {
-      pal_match <- pal[match(as.character(x), limits)]
-    } else {
+    if (is_named(pal)) {
+      # if pal is named, limit the pal by the names first,
+      # then limit the values by the pal
+      idx_nomatch <- is.na(match(names(pal), limits))
+      pal[idx_nomatch] <- NA
       pal_match <- pal[match(as.character(x), names(pal))]
       pal_match <- unname(pal_match)
+    } else {
+      # if pal is not named, limit the values directly
+      pal_match <- pal[match(as.character(x), limits)]
     }
 
     if (self$na.translate) {
@@ -806,7 +828,7 @@ ScaleDiscrete <- ggproto("ScaleDiscrete", Scale,
     }
 
     if (identical(self$breaks, NA)) {
-      stop("Invalid breaks specification. Use NULL, not NA", call. = FALSE)
+      abort("Invalid breaks specification. Use NULL, not NA")
     }
 
     if (is.waive(self$breaks)) {
@@ -838,11 +860,10 @@ ScaleDiscrete <- ggproto("ScaleDiscrete", Scale,
     }
 
     if (identical(self$labels, NA)) {
-      stop("Invalid labels specification. Use NULL, not NA", call. = FALSE)
+      abort("Invalid labels specification. Use NULL, not NA")
     }
 
     if (is.waive(self$labels)) {
-      breaks <- self$get_breaks()
       if (is.numeric(breaks)) {
         # Only format numbers, because on Windows, format messes up encoding
         format(breaks, justify = "none")
@@ -926,7 +947,7 @@ ScaleBinned <- ggproto("ScaleBinned", Scale,
 
   train = function(self, x) {
     if (!is.numeric(x)) {
-      stop("Binned scales only support continuous data", call. = FALSE)
+      abort("Binned scales only support continuous data")
     }
 
     if (length(x) == 0) {
@@ -965,7 +986,8 @@ ScaleBinned <- ggproto("ScaleBinned", Scale,
         self$palette.cache <- pal
       }
 
-      pal[x_binned]
+      scaled <- pal[x_binned]
+      ifelse(!is.na(scaled), scaled, self$na.value)
     }
   },
 
@@ -985,14 +1007,14 @@ ScaleBinned <- ggproto("ScaleBinned", Scale,
     if (is.null(self$breaks)) {
       return(NULL)
     } else if (identical(self$breaks, NA)) {
-      stop("Invalid breaks specification. Use NULL, not NA", call. = FALSE)
+      abort("Invalid breaks specification. Use NULL, not NA")
     } else if (is.waive(self$breaks)) {
       if (self$nice.breaks) {
         if (!is.null(self$n.breaks) && trans_support_nbreaks(self$trans)) {
           breaks <- self$trans$breaks(limits, n = self$n.breaks)
         } else {
           if (!is.null(self$n.breaks)) {
-            warning("Ignoring n.breaks. Use a trans object that supports setting number of breaks", call. = FALSE)
+            warn("Ignoring n.breaks. Use a trans object that supports setting number of breaks")
           }
           breaks <- self$trans$breaks(limits)
         }
@@ -1030,7 +1052,7 @@ ScaleBinned <- ggproto("ScaleBinned", Scale,
         breaks <- self$breaks(limits, n.breaks = n.breaks)
       } else {
         if (!is.null(self$n.breaks)) {
-          warning("Ignoring n.breaks. Use a breaks function that supports setting number of breaks", call. = FALSE)
+          warn("Ignoring n.breaks. Use a breaks function that supports setting number of breaks")
         }
         breaks <- self$breaks(limits)
       }
@@ -1055,7 +1077,7 @@ ScaleBinned <- ggproto("ScaleBinned", Scale,
     if (is.null(self$labels)) {
       return(NULL)
     } else if (identical(self$labels, NA)) {
-      stop("Invalid labels specification. Use NULL, not NA", call. = FALSE)
+      abort("Invalid labels specification. Use NULL, not NA")
     } else if (is.waive(self$labels)) {
       labels <- self$trans$format(breaks)
     } else if (is.function(self$labels)) {
@@ -1064,7 +1086,7 @@ ScaleBinned <- ggproto("ScaleBinned", Scale,
       labels <- self$labels
     }
     if (length(labels) != length(breaks)) {
-      stop("Breaks and labels are different lengths")
+      abort("Breaks and labels are different lengths")
     }
     labels
   },
@@ -1123,7 +1145,7 @@ check_transformation <- function(x, transformed, name, axis) {
     } else {
       "discrete"
     }
-    warning("Transformation introduced infinite values in ", type, " ", axis, "-axis", call. = FALSE)
+    warn(glue("Transformation introduced infinite values in {type} {axis}-axis"))
   }
 }
 

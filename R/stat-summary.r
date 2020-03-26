@@ -226,18 +226,20 @@ summarise_by_x <- function(data, summary, ...) {
 #' @return A data frame with columns `y`, `ymin`, and `ymax`.
 #' @name hmisc
 #' @examples
+#' if (requireNamespace("Hmisc", quietly = TRUE)) {
 #' x <- rnorm(100)
 #' mean_cl_boot(x)
 #' mean_cl_normal(x)
 #' mean_sdl(x)
 #' median_hilow(x)
+#' }
 NULL
 
 wrap_hmisc <- function(fun) {
 
   function(x, ...) {
     if (!requireNamespace("Hmisc", quietly = TRUE))
-      stop("Hmisc package required for this function", call. = FALSE)
+      abort("Hmisc package required for this function")
 
     fun <- getExportedValue("Hmisc", fun)
     result <- do.call(fun, list(x = quote(x), ...))
